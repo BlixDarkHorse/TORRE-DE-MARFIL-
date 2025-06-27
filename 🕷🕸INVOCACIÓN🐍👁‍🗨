@@ -1,0 +1,401 @@
+import sys
+import os
+import asyncio
+import json
+from datetime import datetime
+import keyword
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QTextEdit, QPushButton, QListWidget, QFileDialog, QMessageBox,
+    QSplitter, QFrame, QLabel, QAction, QMenu, QFontDialog
+)
+from PyQt5.QtGui import (
+    QFont, QColor, QPainter, QPixmap, QSyntaxHighlighter, QTextCharFormat,
+    QTextCursor
+)
+from PyQt5.QtCore import Qt, QTimer, QRegExp
+from PyQt5.QtWebEngineWidgets import QWebEngineView
+import edge_tts
+try:
+    from fuzzywuzzy import fuzz
+    FUZZY_AVAILABLE = True
+except ImportError:
+    FUZZY_AVAILABLE = False
+
+MISIFUS_FOLDER = "Misifus_Fumadox.MF"
+LOG_FILE = os.path.join(MISIFUS_FOLDER, "PANGETYUM.vtha")
+SETTINGS_FILE = os.path.join(MISIFUS_FOLDER, "config.vtha")
+MOSCU_PANDA_FILE = "MOSCU_PANDA_XL.BDK"
+
+class SettingsManager:
+    def __init__(self, path=SETTINGS_FILE):
+        self.path = path
+        self.settings = {"fondos_dir": "fondos", "voice": "es-MX-DaliaNeural"}
+        self.load()
+
+    def load(self):
+        if os.path.exists(self.path):
+            try:
+                with open(self.path, "r", encoding="utf-8") as f:
+                    self.settings.update(json.load(f))
+            except Exception:
+                pass
+        else:
+            os.makedirs(os.path.dirname(self.path), exist_ok=True)
+            self.save()
+
+    def save(self):
+        with open(self.path, "w", encoding="utf-8") as f:
+            json.dump(self.settings, f, indent=2)
+
+    def get(self, key, default=None):
+        return self.settings.get(key, default)
+
+    def set(self, key, value):
+        self.settings[key] = value
+        self.save()
+
+def append_to_log(user_msg, ai_msg):
+    os.makedirs(MISIFUS_FOLDER, exist_ok=True)
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    with open(LOG_FILE, 'a', encoding='utf-8') as f:
+        f.write(f'[{timestamp}] USER: {user_msg}\n')
+        f.write(f'[{timestamp}] AI: {ai_msg}\n')
+
+def search_moscu_panda(term, max_hits=3):
+    if not os.path.exists(MOSCU_PANDA_FILE):
+        return []
+    results = []
+    with open(MOSCU_PANDA_FILE, 'r', encoding='utf-8', errors='ignore') as f:
+        for line in f:
+            clean = line.strip()
+            if not clean:
+                continue
+            score = 0
+            if FUZZY_AVAILABLE:
+                score = fuzz.partial_ratio(term.lower(), clean.lower())
+            if term.lower() in clean.lower() or score >= 70:
+                results.append(clean)
+                if len(results) >= max_hits:
+                    break
+    return results
+
+class PythonHighlighter(QSyntaxHighlighter):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.highlighting_rules = []
+
+        keyword_format = QTextCharFormat()
+        keyword_format.setForeground(QColor('#FF7F00'))
+        keyword_format.setFontWeight(QFont.Bold)
+        for word in keyword.kwlist:
+            pattern = QRegExp(f"\\b{word}\\b")
+            self.highlighting_rules.append((pattern, keyword_format))
+
+        string_format = QTextCharFormat()
+        string_format.setForeground(QColor('#00B000'))
+        self.highlighting_rules.append((QRegExp('".*"'), string_format))
+        self.highlighting_rules.append((QRegExp("'.*'"), string_format))
+
+        comment_format = QTextCharFormat()
+        comment_format.setForeground(QColor('#DD0000'))
+        comment_format.setFontItalic(True)
+        self.highlighting_rules.append((QRegExp('#[^\n]*'), comment_format))
+
+        number_format = QTextCharFormat()
+        number_format.setForeground(QColor('#009E9E'))
+        self.highlighting_rules.append((QRegExp('\\b[0-9]+\\.?[0-9]*\\b'), number_format))
+
+        self_format = QTextCharFormat()
+        self_format.setForeground(QColor('#9C27B0'))
+        self_format.setFontWeight(QFont.Bold)
+        self.highlighting_rules.append((QRegExp('\\bself\\b'), self_format))
+
+        function_format = QTextCharFormat()
+        function_format.setForeground(QColor('#0000FF'))
+        function_format.setFontWeight(QFont.Bold)
+        self.highlighting_rules.append((QRegExp('\\bdef\\s+[A-Za-z0-9_]+'), function_format))
+        self.highlighting_rules.append((QRegExp('\\bclass\\s+[A-Za-z0-9_]+'), function_format))
+
+    def highlightBlock(self, text):
+        for pattern, fmt in self.highlighting_rules:
+            expression = QRegExp(pattern)
+            index = expression.indexIn(text)
+            while index >= 0:
+                length = expression.matchedLength()
+                self.setFormat(index, length, fmt)
+                index = expression.indexIn(text, index + length)
+        self.setCurrentBlockState(0)
+
+class LienzoWidget(QTextEdit):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.parent_window = parent
+
+    def contextMenuEvent(self, event):
+        menu = QMenu(self)
+        settings_menu = menu.addMenu('Gestor de Ajustes ⚙️')
+        font_action = settings_menu.addAction('Cambiar Fuente 🖋️')
+        bg_action = settings_menu.addAction('Cargar Imagen de Fondo 🖼️')
+        file_action = settings_menu.addAction('Cargar Archivo al Lienzo 📂')
+        menu.addSeparator()
+        copy_action = menu.addAction('Copiar')
+        paste_action = menu.addAction('Pegar')
+        action = menu.exec_(self.mapToGlobal(event.pos()))
+        if action == font_action:
+            self.change_font()
+        elif action == bg_action:
+            self.parent_window.select_background_image()
+        elif action == file_action:
+            self.parent_window.load_file_to_lienzo()
+        elif action == copy_action:
+            self.copy()
+        elif action == paste_action:
+            self.paste()
+
+    def change_font(self):
+        font, ok = QFontDialog.getFont(self.currentFont(), self, 'Seleccionar Fuente')
+        if ok:
+            self.setCurrentFont(font)
+
+class InterfazDeAnalisisAvanzado(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle('Entorno del Abismo')
+        self.setGeometry(100, 100, 1800, 900)
+        self.settings = SettingsManager()
+        self.background_pixmap = None
+        self.background_images = []
+        self.background_index = 0
+        self.code_files = {}
+        self.voice = self.settings.get('voice', 'es-MX-DaliaNeural')
+
+        self.setup_environment()
+
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.change_background)
+        if self.background_images:
+            self.timer.start(30000)
+
+        self.initUI()
+        self.apply_styles()
+        self.center_window()
+
+    def center_window(self):
+        try:
+            screen = QApplication.primaryScreen().geometry()
+            geo = self.frameGeometry()
+            geo.moveCenter(screen.center())
+            self.move(geo.topLeft())
+        except Exception:
+            pass
+
+    def setup_environment(self):
+        self.fondos_dir = self.settings.get('fondos_dir', 'fondos')
+        os.makedirs(self.fondos_dir, exist_ok=True)
+        for fname in os.listdir(self.fondos_dir):
+            if fname.lower().endswith(('.png', '.jpg', '.jpeg')):
+                self.background_images.append(os.path.join(self.fondos_dir, fname))
+        if self.background_images:
+            self.background_pixmap = QPixmap(self.background_images[self.background_index])
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        if self.background_pixmap and not self.background_pixmap.isNull():
+            scaled = self.background_pixmap.scaled(self.size(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+            x = (self.width() - scaled.width()) / 2
+            y = (self.height() - scaled.height()) / 2
+            painter.drawPixmap(int(x), int(y), scaled)
+        else:
+            painter.fillRect(self.rect(), QColor(0, 0, 0))
+
+    def change_background(self):
+        if not self.background_images:
+            return
+        self.background_index = (self.background_index + 1) % len(self.background_images)
+        self.background_pixmap = QPixmap(self.background_images[self.background_index])
+        self.update()
+
+    def initUI(self):
+        central = QWidget()
+        self.setCentralWidget(central)
+        central.setStyleSheet('background: transparent;')
+
+        layout = QHBoxLayout(central)
+        splitter = QSplitter(Qt.Horizontal)
+        splitter.setStyleSheet('QSplitter::handle { background-color: #FFD700; } QSplitter::handle:horizontal { width: 3px; }')
+        layout.addWidget(splitter)
+
+        left_panel = QFrame()
+        left_panel.setObjectName('Panel')
+        left_layout = QVBoxLayout(left_panel)
+        left_title = QLabel('Repositorio de Código 📜')
+        left_title.setObjectName('TitleLabel')
+        self.code_list_widget = QListWidget()
+        self.code_list_widget.itemClicked.connect(self.display_code_in_lienzo)
+        load_code_button = QPushButton('Cargar Código ➕')
+        load_code_button.clicked.connect(self.load_code_file)
+        left_layout.addWidget(left_title)
+        left_layout.addWidget(load_code_button)
+        left_layout.addWidget(self.code_list_widget)
+
+        middle_panel = QFrame()
+        middle_panel.setObjectName('Panel')
+        middle_layout = QVBoxLayout(middle_panel)
+        middle_title = QLabel('Consola de Interacción ⚡')
+        middle_title.setObjectName('TitleLabel')
+        self.conversation_display = QTextEdit()
+        self.conversation_display.setReadOnly(True)
+        self.chat_input = QTextEdit()
+        self.chat_input.setFixedHeight(100)
+        self.chat_input.setPlaceholderText('Introduzca su consulta aquí...')
+        send_button = QPushButton('Ejecutar Consulta 🚀')
+        send_button.clicked.connect(self.send_chat_message)
+        speak_button = QPushButton('Leer Última Respuesta 🔊')
+        speak_button.clicked.connect(self.speak_last_response)
+        self.chat_highlighter = PythonHighlighter(self.conversation_display.document())
+        middle_layout.addWidget(middle_title)
+        middle_layout.addWidget(self.conversation_display)
+        middle_layout.addWidget(self.chat_input)
+        middle_layout.addWidget(send_button)
+        middle_layout.addWidget(speak_button)
+
+        right_panel = QFrame()
+        right_panel.setObjectName('Panel')
+        right_layout = QVBoxLayout(right_panel)
+        right_title = QLabel('Lienzo de Creación 🎨')
+        right_title.setObjectName('TitleLabel')
+        self.lienzo = LienzoWidget(self)
+        self.lienzo.setPlaceholderText('El poder de crear reside aquí...')
+        self.lienzo_highlighter = PythonHighlighter(self.lienzo.document())
+        viz_layout = QHBoxLayout()
+        render_gui_button = QPushButton('Renderizar GUI de PyQt 👁️')
+        render_gui_button.clicked.connect(self.render_pyqt_gui)
+        render_html_button = QPushButton('Renderizar HTML 🌐')
+        render_html_button.clicked.connect(self.render_html)
+        viz_layout.addWidget(render_gui_button)
+        viz_layout.addWidget(render_html_button)
+        right_layout.addWidget(right_title)
+        right_layout.addWidget(self.lienzo)
+        right_layout.addLayout(viz_layout)
+
+        splitter.addWidget(left_panel)
+        splitter.addWidget(middle_panel)
+        splitter.addWidget(right_panel)
+        splitter.setSizes([300, 500, 700])
+
+    def apply_styles(self):
+        self.setStyleSheet('''
+            QMainWindow { background-color: #000000; }
+            #Panel { background-color: rgba(0,0,0,0.85); border: 1px solid #FFD700; border-radius: 10px; }
+            #TitleLabel { color: #FFD700; font-family: "Old English Text MT", serif; font-size: 24pt; font-weight: bold; padding: 5px; border-bottom: 2px solid #FFD700; margin-bottom: 10px; }
+            QTextEdit, QListWidget { background-color: rgba(30,30,30,0.9); color: #F0F0F0; border: 1px solid #444; border-radius: 5px; font-family: "Consolas", monospace; font-size: 12pt; padding: 8px; }
+            QTextEdit::placeholder { color: #555; }
+            QPushButton { background-color: #FFD700; color: black; font-family: "Garamond", serif; font-size: 14pt; font-weight: bold; padding: 10px; border: 1px solid #FFD700; border-radius: 5px; margin-top: 5px; }
+            QPushButton:hover { background-color: #FFEB3B; }
+            QPushButton:pressed { background-color: #B8860B; }
+            QListWidget::item { padding: 8px; border-bottom: 1px solid #333; }
+            QListWidget::item:selected { background-color: #FFD700; color: black; font-weight: bold; }
+            QMenu { background-color: rgba(30,30,30,0.95); color: #FFD700; border: 1px solid #FFD700; }
+            QMenu::item:selected { background-color: #FFD700; color: black; }
+        ''')
+
+    def load_code_file(self):
+        paths, _ = QFileDialog.getOpenFileNames(self, 'Seleccionar Código', '', 'Archivos de Python (*.py);;Todos los Archivos (*)')
+        for path in paths:
+            name = os.path.basename(path)
+            if name not in self.code_files:
+                try:
+                    with open(path, 'r', encoding='utf-8') as f:
+                        self.code_files[name] = f.read()
+                    self.code_list_widget.addItem(name)
+                except Exception as e:
+                    QMessageBox.critical(self, 'Error de Lectura', f'No se pudo leer el archivo {name}:\n{e}')
+
+    def display_code_in_lienzo(self, item):
+        name = item.text()
+        if name in self.code_files:
+            self.lienzo.setPlainText(self.code_files[name])
+
+    def send_chat_message(self):
+        text = self.chat_input.toPlainText().strip()
+        if not text:
+            return
+        self.conversation_display.moveCursor(QTextCursor.End)
+        self.conversation_display.insertHtml(f"<p style='color:#FFD700;'><b>Usuario:</b></p><pre style='color:#FFFFFF; background-color:#2A2A2A; border-left: 3px solid #FFD700; padding: 5px;'>{text}</pre>")
+        response_text = f"Recibido. Procesando consulta: '{text[:30]}...'"
+        search_hits = search_moscu_panda(text)
+        if search_hits:
+            hits_html = ''.join(f'<li>{hit}</li>' for hit in search_hits)
+            response_text += f"<br><b>Hallazgos Moscú Panda:</b><ul>{hits_html}</ul>"
+        self.conversation_display.moveCursor(QTextCursor.End)
+        self.conversation_display.insertHtml(f"<p style='color:#00BFFF;'><b>Asistente:</b></p><p style='color:#E0E0E0;'>{response_text}</p><hr>")
+        self.chat_input.clear()
+        self.last_response = response_text
+        append_to_log(text, response_text)
+
+    def speak_last_response(self):
+        if not getattr(self, 'last_response', None):
+            return
+        asyncio.create_task(self._speak_async(self.last_response))
+
+    async def _speak_async(self, text):
+        outfile = 'respuesta.mp3'
+        communicate = edge_tts.Communicate(text=text, voice=self.voice)
+        await communicate.save(outfile)
+        # Playback requires external player; here we just notify user
+        self.conversation_display.append(f"<i>Audio guardado en {outfile}</i>")
+
+    def render_pyqt_gui(self):
+        code_to_run = self.lienzo.toPlainText()
+        if not code_to_run:
+            QMessageBox.warning(self, 'Lienzo Vacío', 'No hay código en el lienzo para renderizar.')
+            return
+        try:
+            namespace = {}
+            exec(code_to_run, namespace)
+            for name, obj in namespace.items():
+                if isinstance(obj, type) and issubclass(obj, (QWidget, QMainWindow)):
+                    self.rendered_window = obj()
+                    self.rendered_window.setWindowTitle('Visualización de GUI')
+                    self.rendered_window.show()
+                    return
+            QMessageBox.information(self, 'Sin GUI', 'El código se ejecutó pero no se encontró una clase de ventana.')
+        except Exception as e:
+            QMessageBox.critical(self, 'Error de Ejecución 😱', f'El código en el lienzo contiene un error:\n\n{type(e).__name__}: {e}')
+
+    def render_html(self):
+        html_content = self.lienzo.toPlainText()
+        if not html_content.strip().lower().startswith(('<html', '<!doctype')):
+            QMessageBox.warning(self, 'Contenido no es HTML', 'El texto en el lienzo no parece ser código HTML válido.')
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle('Visualización de HTML')
+        dialog.setGeometry(200, 200, 1024, 768)
+        layout = QVBoxLayout(dialog)
+        web_view = QWebEngineView()
+        web_view.setHtml(html_content)
+        layout.addWidget(web_view)
+        dialog.exec_()
+
+    def select_background_image(self):
+        path, _ = QFileDialog.getOpenFileName(self, 'Seleccionar Imagen de Fondo', self.fondos_dir, 'Archivos de Imagen (*.png *.jpg *.jpeg)')
+        if path:
+            self.background_pixmap = QPixmap(path)
+            self.update()
+
+    def load_file_to_lienzo(self):
+        path, _ = QFileDialog.getOpenFileName(self, 'Cargar Archivo al Lienzo', '', 'Archivos de Python (*.py);;Archivos de Texto (*.txt);;Todos los Archivos (*)')
+        if path:
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    self.lienzo.setPlainText(f.read())
+            except Exception as e:
+                QMessageBox.critical(self, 'Error de Lectura', f'No se pudo leer el archivo:\n{e}')
+
+if __name__ == '__main__':
+    os.makedirs(MISIFUS_FOLDER, exist_ok=True)
+    app = QApplication(sys.argv)
+    window = InterfazDeAnalisisAvanzado()
+    window.show()
+    sys.exit(app.exec_())
