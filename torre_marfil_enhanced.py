@@ -11,6 +11,7 @@ from PyQt5.QtCore import Qt, QTimer, QRegExp
 
 SETTINGS_FILE = 'config.vtha'
 MEMORY_FILE = 'pangetyum.vtha'
+DEFAULT_ROOT = 'DARK_SITE'
 
 class SettingsManager:
     def __init__(self, path=SETTINGS_FILE):
@@ -39,6 +40,61 @@ class SettingsManager:
     def set(self, key, value):
         self.settings[key] = value
         self.save()
+
+def create_default_structure(base_dir=DEFAULT_ROOT):
+    """Create the default directory layout with placeholder files."""
+    structure = {
+        "MOSCÚ PANDA XL.BDK": {
+            "VS-1": ["GPT_BDK_1.BDK", "GPT_BDK_2.BDK"],
+            "M1": ["GEMINI_BDK_1.BDK", "GEMINI_BDK_2.BDK"],
+            "CY1": ["GROK_BDK_1.BDK", "GROK_BDK_2.BDK"],
+        },
+        "MISIFÚS FUMADOX.VTHA": {
+            "VS00-1": [
+                "PANGETYUM.VTHA",
+                "MEMORIA ETERNA.VTHA",
+                ("LOGS_DIARIOS", ["LOG_GPT_DIARIO.VTHA"]),
+                ("DIRECTRICES_Y_REGLAS_OPERATIVAS", ["REGLAS_GPT.VTHA"]),
+            ],
+            "M1": [
+                "PANGETYUM.VTHA",
+                "MEMORIA ETERNA.VTHA",
+                ("LOGS_DIARIOS", ["LOG_GEMINI_DIARIO.VTHA"]),
+                ("DIRECTRICES_Y_REGLAS_OPERATIVAS", ["REGLAS_GEMINI.VTHA"]),
+            ],
+            "CY1": [
+                "PANGETYUM.VTHA",
+                "MEMORIA ETERNA.VTHA",
+                ("LOGS_DIARIOS", ["LOG_GROK_DIARIO.VTHA"]),
+                ("DIRECTRICES_Y_REGLAS_OPERATIVAS", ["REGLAS_GROK.VTHA"]),
+            ],
+        },
+        "FAIRY BLACK": {
+            "IMAGENES_DE_FONDO": [],
+            "CONFIGURACIONES_GENERALES": [],
+            "RUTAS_LINKS": [],
+            "GALERIAS": [],
+            "DOCS_GENERALES": [],
+        },
+    }
+
+    for folder, contents in structure.items():
+        base_path = os.path.join(base_dir, folder)
+        for sub, files in contents.items():
+            sub_path = os.path.join(base_path, sub)
+            if isinstance(files, list):
+                os.makedirs(sub_path, exist_ok=True)
+                for entry in files:
+                    if isinstance(entry, tuple):
+                        inner_dir, inner_files = entry
+                        inner_path = os.path.join(sub_path, inner_dir)
+                        os.makedirs(inner_path, exist_ok=True)
+                        for fname in inner_files:
+                            open(os.path.join(inner_path, fname), "a").close()
+                    else:
+                        open(os.path.join(sub_path, entry), "a").close()
+            else:
+                os.makedirs(sub_path, exist_ok=True)
 
 class SimpleHighlighter(QSyntaxHighlighter):
     def __init__(self, document):
@@ -78,7 +134,22 @@ class TarantulaWindow(QMainWindow):
         self.editor = QTextEdit()
         self.editor.setFont(QFont('Old English', 14))
         self.highlighter = SimpleHighlighter(self.editor.document())
-        self.setCentralWidget(self.editor)
+
+        self.container = QWidget()
+        layout = QVBoxLayout(self.container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.editor)
+
+        self.slogan_label = QLabel("🕷🕸👁‍🗨¡HOY CONSTRUIMOS EL IMPERIO!💜🖤🔥🚀")
+        self.slogan_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.slogan_label)
+
+        self.setCentralWidget(self.container)
+
+        self.hue = 0
+        self.color_timer = QTimer(self)
+        self.color_timer.timeout.connect(self.cycle_color)
+        self.color_timer.start(200)
 
         self.create_menu()
         self.load_memory()
@@ -87,6 +158,13 @@ class TarantulaWindow(QMainWindow):
         self.timer.timeout.connect(self.rotate_background)
         if self.backgrounds:
             self.timer.start(20000)
+
+    def cycle_color(self):
+        self.hue = (self.hue + 10) % 360
+        color = QColor.fromHsl(self.hue, 255, 180)
+        style = f"color:{color.name()}; border: 2px solid {color.name()};"
+        self.slogan_label.setStyleSheet(style)
+        self.setStyleSheet(f"QMainWindow{{border:2px solid {color.name()};}}")
 
     def create_menu(self):
         menubar = self.menuBar()
@@ -188,6 +266,7 @@ class TarantulaWindow(QMainWindow):
                     self.editor.append('\n🧬 RECUERDOS CARGADOS:\n'+cont)
 
 if __name__ == '__main__':
+    create_default_structure()
     app = QApplication(sys.argv)
     win = TarantulaWindow()
     win.show()
