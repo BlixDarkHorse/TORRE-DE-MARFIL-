@@ -9,6 +9,56 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QFont, QColor, QPainter, QPixmap, QSyntaxHighlighter, QTextCharFormat, QTextCursor
 from PyQt5.QtCore import Qt, QTimer, QRegExp
 
+
+def create_dark_site_structure(base_path='DARK SITE'):
+    """Create the folder hierarchy used by the project."""
+    os.makedirs(base_path, exist_ok=True)
+    mosc = os.path.join(base_path, 'MOSCÚ PANDA XL.BDK')
+    for sub, files in {
+        'VS-1': ['GPT_BDK_1.BDK', 'GPT_BDK_2.BDK'],
+        'M1': ['GEMINI_BDK_1.BDK', 'GEMINI_BDK_2.BDK'],
+        'CY1': ['GROK_BDK_1.BDK', 'GROK_BDK_2.BDK'],
+    }.items():
+        sub_path = os.path.join(mosc, sub)
+        os.makedirs(sub_path, exist_ok=True)
+        for fname in files:
+            open(os.path.join(sub_path, fname), 'a', encoding='utf-8').close()
+    misifus = os.path.join(base_path, 'MISIFÚS FUMADOX.VTHA')
+    for sub, files in {
+        'VS00-1': [
+            'PANGETYUM.VTHA',
+            'MEMORIA ETERNA.VTHA',
+            ('LOGS_DIARIOS', ['LOG_GPT_DIARIO.VTHA']),
+            ('DIRECTRICES_Y_REGLAS_OPERATIVAS', ['REGLAS_GPT.VTHA']),
+        ],
+        'M1': [
+            'PANGETYUM.VTHA',
+            'MEMORIA ETERNA.VTHA',
+            ('LOGS_DIARIOS', ['LOG_GEMINI_DIARIO.VTHA']),
+            ('DIRECTRICES_Y_REGLAS_OPERATIVAS', ['REGLAS_GEMINI.VTHA']),
+        ],
+        'CY1': [
+            'PANGETYUM.VTHA',
+            'MEMORIA ETERNA.VTHA',
+            ('LOGS_DIARIOS', ['LOG_GROK_DIARIO.VTHA']),
+            ('DIRECTRICES_Y_REGLAS_OPERATIVAS', ['REGLAS_GROK.VTHA']),
+        ],
+    }.items():
+        sub_path = os.path.join(misifus, sub)
+        os.makedirs(sub_path, exist_ok=True)
+        for item in files:
+            if isinstance(item, tuple):
+                folder, f_list = item
+                folder_path = os.path.join(sub_path, folder)
+                os.makedirs(folder_path, exist_ok=True)
+                for fname in f_list:
+                    open(os.path.join(folder_path, fname), 'a', encoding='utf-8').close()
+            else:
+                open(os.path.join(sub_path, item), 'a', encoding='utf-8').close()
+    fairy = os.path.join(base_path, 'FAIRY BLACK')
+    for sub in ['IMAGENES_DE_FONDO','CONFIGURACIONES_GENERALES','RUTAS_LINKS','GALERIAS','DOCS_GENERALES']:
+        os.makedirs(os.path.join(fairy, sub), exist_ok=True)
+
 SETTINGS_FILE = 'config.vtha'
 MEMORY_FILE = 'pangetyum.vtha'
 
@@ -76,14 +126,25 @@ class TarantulaWindow(QMainWindow):
         self.backgrounds = []
         self.bg_index = 0
         self.load_backgrounds()
+        create_dark_site_structure()
 
+        self.main_widget = QWidget()
+        self.setCentralWidget(self.main_widget)
+        layout = QVBoxLayout(self.main_widget)
         self.editor = QTextEdit()
+        layout.addWidget(self.editor)
+        self.slogan_label = QLabel('🕷🕸👁‍🗨¡HOY CONSTRUIMOS EL IMPERIO!💜🖤🔥🚀')
+        self.slogan_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.slogan_label)
         self.editor.setFont(QFont('Old English', 14))
         self.highlighter = SimpleHighlighter(self.editor.document())
-        self.setCentralWidget(self.editor)
 
         self.create_menu()
         self.load_memory()
+        self.color_hue = 0
+        self.color_timer = QTimer(self)
+        self.color_timer.timeout.connect(self.cycle_slogan_color)
+        self.color_timer.start(200)
 
         self.slogan_label = QLabel('🕷🕸¡HOY CONSTRUIMOS EL IMPERIO!💜🖤🔥🚀')
         self.slogan_label.setAlignment(Qt.AlignCenter)
@@ -201,11 +262,12 @@ class TarantulaWindow(QMainWindow):
                 if cont:
                     self.editor.append('\n🧬 RECUERDOS CARGADOS:\n'+cont)
 
-    def apply_accent_color(self, color):
-        self.slogan_label.setStyleSheet(f'color: {color}; font-weight: bold;')
-        self.setStyleSheet(f"QMainWindow{{border:2px solid {color};}}")
 
-    def cycle_accent_color(self):
+    def cycle_slogan_color(self):
+        color = QColor.fromHsv(self.color_hue % 360, 255, 255)
+        self.slogan_label.setStyleSheet(f'color: {color.name()};')
+        self.color_hue += 5
+
         self.accent_hue = (self.accent_hue + 10) % 360
         qc = QColor.fromHsv(self.accent_hue, 255, 255)
         self.apply_accent_color(qc.name())
@@ -230,10 +292,7 @@ class TarantulaWindow(QMainWindow):
             os.path.join(misifus, 'VS00-1'): 'GPT',
             os.path.join(misifus, 'M1'): 'GEMINI',
             os.path.join(misifus, 'CY1'): 'GROK'
-        }
-        for folder, name in modelo_mf.items():
-            os.makedirs(os.path.join(folder, 'LOGS_DIARIOS'), exist_ok=True)
-            os.makedirs(os.path.join(folder, 'DIRECTRICES_Y_REGLAS_OPERATIVAS'), exist_ok=True)
+        }edirs(os.path.join(folder, 'DIRECTRICES_Y_REGLAS_OPERATIVAS'), exist_ok=True)
             open(os.path.join(folder, 'PANGETYUM.VTHA'), 'a').close()
             open(os.path.join(folder, 'MEMORIA ETERNA.VTHA'), 'a').close()
             open(os.path.join(folder, 'LOGS_DIARIOS', f'LOG_{name}_DIARIO.VTHA'), 'a').close()
@@ -246,10 +305,17 @@ class TarantulaWindow(QMainWindow):
             'GALERIAS',
             'DOCS_GENERALES'
         ]
+        for folder, name in modelo_mf.items():
+            os.makedirs(os.path.join(folder, 'LOGS_DIARIOS'), exist_ok=True)
+            os.mak
         for d in fairy_dirs:
             os.makedirs(os.path.join(fairy, d), exist_ok=True)
+    def apply_accent_color(self, color):
+        self.slogan_label.setStyleSheet(f'color: {color}; font-weight: bold;')
+        self.setStyleSheet(f"QMainWindow{{border:2px solid {color};}}")
 
-
+    def cycle_accent_color(sef):
+ 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     win = TarantulaWindow()
