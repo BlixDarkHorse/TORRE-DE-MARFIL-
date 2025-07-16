@@ -68,7 +68,8 @@ class SettingsManager:
         self.settings = {
             'fondos_dir': 'fondos',
             'bg_scale_mode': 'expand',
-            'bg_custom_scale': 1.0
+            'bg_custom_scale': 1.0,
+            'accent_color': '#FF00FF'
         }
         self.load()
 
@@ -119,6 +120,7 @@ class TarantulaWindow(QMainWindow):
         self.setWindowTitle('🕷 Torre de Marfil IDE')
         self.resize(1200,800)
         self.settings = SettingsManager()
+        self.accent_hue = 0
         self.memory_file = MEMORY_FILE
 
         self.backgrounds = []
@@ -143,6 +145,18 @@ class TarantulaWindow(QMainWindow):
         self.color_timer = QTimer(self)
         self.color_timer.timeout.connect(self.cycle_slogan_color)
         self.color_timer.start(200)
+
+        self.slogan_label = QLabel('🕷🕸¡HOY CONSTRUIMOS EL IMPERIO!💜🖤🔥🚀')
+        self.slogan_label.setAlignment(Qt.AlignCenter)
+        self.statusBar().addPermanentWidget(self.slogan_label)
+
+        self.rgb_timer = QTimer(self)
+        self.rgb_timer.timeout.connect(self.cycle_accent_color)
+        self.rgb_timer.start(500)
+
+        self.apply_accent_color(self.settings.get('accent_color'))
+
+        self.setup_directories()
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.rotate_background)
@@ -254,6 +268,54 @@ class TarantulaWindow(QMainWindow):
         self.slogan_label.setStyleSheet(f'color: {color.name()};')
         self.color_hue += 5
 
+        self.accent_hue = (self.accent_hue + 10) % 360
+        qc = QColor.fromHsv(self.accent_hue, 255, 255)
+        self.apply_accent_color(qc.name())
+
+    def setup_directories(self):
+        base = os.path.join(os.getcwd(), 'DARK SITE')
+        moscu = os.path.join(base, 'MOSCÚ PANDA XL.BDK')
+        misifus = os.path.join(base, 'MISIFÚS FUMADOX.VTHA')
+        fairy = os.path.join(base, 'FAIRY BLACK')
+
+        models = {
+            os.path.join(moscu, 'VS-1'): ['GPT_BDK_1.BDK', 'GPT_BDK_2.BDK'],
+            os.path.join(moscu, 'M1'): ['GEMINI_BDK_1.BDK', 'GEMINI_BDK_2.BDK'],
+            os.path.join(moscu, 'CY1'): ['GROK_BDK_1.BDK', 'GROK_BDK_2.BDK']
+        }
+        for folder, files in models.items():
+            os.makedirs(folder, exist_ok=True)
+            for fname in files:
+                open(os.path.join(folder, fname), 'a', encoding='utf-8').close()
+
+        modelo_mf = {
+            os.path.join(misifus, 'VS00-1'): 'GPT',
+            os.path.join(misifus, 'M1'): 'GEMINI',
+            os.path.join(misifus, 'CY1'): 'GROK'
+        }edirs(os.path.join(folder, 'DIRECTRICES_Y_REGLAS_OPERATIVAS'), exist_ok=True)
+            open(os.path.join(folder, 'PANGETYUM.VTHA'), 'a').close()
+            open(os.path.join(folder, 'MEMORIA ETERNA.VTHA'), 'a').close()
+            open(os.path.join(folder, 'LOGS_DIARIOS', f'LOG_{name}_DIARIO.VTHA'), 'a').close()
+            open(os.path.join(folder, 'DIRECTRICES_Y_REGLAS_OPERATIVAS', f'REGLAS_{name}.VTHA'), 'a').close()
+
+        fairy_dirs = [
+            'IMAGENES_DE_FONDO',
+            'CONFIGURACIONES_GENERALES',
+            'RUTAS_LINKS',
+            'GALERIAS',
+            'DOCS_GENERALES'
+        ]
+        for folder, name in modelo_mf.items():
+            os.makedirs(os.path.join(folder, 'LOGS_DIARIOS'), exist_ok=True)
+            os.mak
+        for d in fairy_dirs:
+            os.makedirs(os.path.join(fairy, d), exist_ok=True)
+    def apply_accent_color(self, color):
+        self.slogan_label.setStyleSheet(f'color: {color}; font-weight: bold;')
+        self.setStyleSheet(f"QMainWindow{{border:2px solid {color};}}")
+
+    def cycle_accent_color(sef):
+ 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     win = TarantulaWindow()

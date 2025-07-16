@@ -1,12 +1,13 @@
-# TORRE-DE-MARFIL-
-
-Base de control para el orquestador **VITALANETJER SAV VS-001 Galaxy Vyoleta**.
+🕷🕸TORRE-DE-MARFIL-💜🖤🔥🚀
+# BSE SIMBIÓTICA DE CONTROL PARA ORQUESTADOR VITALANETJER SAV VS-001 Galaxy Vyoleta.
 
 ## Estructura de Carpetas
 
-La aplicación genera de forma automática la siguiente jerarquía dentro de `DARK SITE`:
+La aplicación genera de forma automáticamente la siguiente jerarquía
+de directorios dentro dedentro de `DARK SITE`:
 
-```
+=======
+
 DARK SITE/
 ├── MOSCÚ PANDA XL.BDK/
 │   ├── VS-1/
@@ -40,7 +41,6 @@ DARK SITE/
     ├── RUTAS_LINKS/
     ├── GALERIAS/
     └── DOCS_GENERALES/
-```
 
 Los archivos poseen extensión `.BDK` o `.VTHA` pero actualmente contienen texto plano.
 
@@ -53,3 +53,10 @@ un eslogan animado en colores.
 ```bash
 python torre_marfil_enhanced.py
 ```
+=======
+## Personalización RGB
+
+El borde de la ventana y el color del eslogan cambian de tonalidad
+de forma automática produciendo un efecto RGB. Esta animación se puede
+editar modificando el valor `accent_color` dentro de `config.vtha`.
+
